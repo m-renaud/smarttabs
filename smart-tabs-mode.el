@@ -4,14 +4,16 @@
 ;; Copyright © 2011 Joel C. Salomon <joelcsalomon@gmail.com>
 ;; Copyright © 2012 Alan Pearce <alan@alanpearce.co.uk>
 ;; Copyright © 2012 Daniel Dehennin <daniel.dehennin@baby-gnu.org>
+;; Copyright © 2013 Matt Renaud <mrenaud92@gmail.com>
 
 ;; Author: John Croisant <jacius@gmail.com>
-;;         Joel C. Salomon <joelcsalomon@gmail.com>
 ;;         Alan Pearce <alan@alanpearce.co.uk>
 ;;         Daniel Dehennin <daniel.dehennin@baby-gnu.org>
+;;         Matt Renaud <mrenaud92@gmail.com>
+;; Maintainer: Joel C. Salomon <joelcsalomon@gmail.com>
 ;; URL: http://www.emacswiki.org/emacs/SmartTabs
 ;; Created: 19 Sep 2011
-;; Version: 0.2
+;; Version: 1.0
 ;; Keywords: languages
 
 ;; This file is not part of GNU Emacs.
@@ -35,6 +37,11 @@
 
 ;; This package provide a semantic way of using tab characters in
 ;; source code: tabs for indentation, spaces for alignment.
+;;
+;; It is derived from <http://www.emacswiki.org/emacs/SmartTabs>
+;; with modifications by the various authors listed above.
+;;
+;; Modification history is at <https://github.com/jcsalomon/smarttabs>.
 
 ;;; Installation:
 
@@ -90,12 +97,23 @@
 ;;  ;; Ruby
 ;;  (add-hook 'ruby-mode-hook 'smart-tabs-mode-enable)
 ;;  (smart-tabs-advice ruby-indent-line ruby-indent-level)
+
+;;; Adding Language Support
+
+;; Language support can be added through the use of the macro
+;; `smart-tabs-add-language-support'. Pass in the symbol you wish
+;; to use to identify the language, the mode hook, and a list
+;; of cons cells containing (indent-line-function . offset-variable).
+;; For example, if C++ mode was not provided by default it could be
+;; added as follows:
 ;;
-;; This package is derived from <http://www.emacswiki.org/emacs/SmartTabs>
-;; as modified by John Croisant (jacius), along with Julien Fontanet and
-;; Tomita Hiroshi (tomykaira).
+;; (smart-tabs-add-language-support c++ c++-mode-hook
+;;   ((c-indent-line . c-basic-offset)
+;;    (c-indent-region . c-basic-offset)))
 ;;
-;; Modification history is at <https://github.com/jcsalomon/smarttabs>.
+;; NOTE: All language support must be added before the call to
+;;      `smart-tabs-insinuate'.
+
 
 ;;; Code:
 
@@ -108,10 +126,9 @@
 
 ;;;###autoload
 (defmacro smart-tabs-when (condition advice-list)
+  (declare (indent 1))
   `(when ,condition
      ,@(smart-tabs-create-advice-list advice-list)))
-
-(put 'smart-tabs-when 'lisp-indent-function 1)
 
 
 ;;;###autoload
@@ -127,6 +144,7 @@
 `smart-tabs-mode' through `smart-tabs-mode-enable' and adding a lambda
 function to the MODE-HOOK for the specified language. This macro
 simplifies the creation of such a cons cell."
+  (declare (indent 2))
   `'(,lang . (lambda ()
                (add-hook ',mode-hook
                          (lambda ()
@@ -135,12 +153,17 @@ simplifies the creation of such a cons cell."
                            ,@(cl-loop for form in body
                                       collect (macroexpand form)))))))
 
-(put 'smart-tabs-create-language-advice 'lisp-indent-function 2)
-
-
 
 (defvar smart-tabs-insinuate-alist
   `(,(smart-tabs-create-language-advice c c-mode-hook
+       ((c-indent-line . c-basic-offset)
+        (c-indent-region . c-basic-offset)))
+
+    ,(smart-tabs-create-language-advice c++ c++-mode-hook
+       ((c-indent-line . c-basic-offset)
+        (c-indent-region . c-basic-offset)))
+
+    ,(smart-tabs-create-language-advice java java-mode-hook
        ((c-indent-line . c-basic-offset)
         (c-indent-region . c-basic-offset)))
 
@@ -240,6 +263,17 @@ indent function and indent level.
                    (error (format "Unknown smart-tab-mode capable language '%s'" lang)))
                   (t (funcall (cdr lang-map))))))
         languages))
+
+
+;;;###autoload
+(defmacro smart-tabs-add-language-support (lang mode-hook advice-list &rest body)
+  "Add support for a language not already in the `smart-tabs-insinuate-alist'."
+  (declare (indent 2))
+  `(add-to-list
+    'smart-tabs-insinuate-alist
+    (smart-tabs-create-language-advice ,lang ,mode-hook
+      ,advice-list ,@body)))
+
 
 (defun smart-tabs-guess-insinuate (lang-param)
   "Enable smart-tabs-mode if language respect standard naming.
